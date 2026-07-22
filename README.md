@@ -1,5 +1,9 @@
 # RecipeR
 
+<p align="center">
+  <img src="assets/reciper-icon.png" alt="RecipeR mixing bowl icon" width="480">
+</p>
+
 RecipeR is a Python command-line program that takes a public recipe webpage, extracts its recipe
 data, uses an OpenAI model to clean and organize the content, and writes a readable UTF-8 `.txt`
 recipe.
@@ -41,8 +45,13 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'
 ```
 
-Store your existing API key as `OPENAI_API_KEY` in the ignored `.env` file. You can also set the
-variable in your shell. Never commit a real key.
+Create your local configuration file, then add your existing API key to it:
+
+```bash
+cp .env.example .env
+```
+
+You can also set `OPENAI_API_KEY` in your shell. Never commit a real key.
 
 ## Model selection
 
@@ -67,8 +76,16 @@ You can also override it for one run with `--model MODEL`.
 
 ## Use
 
+Run the Python script and paste a public recipe URL when prompted:
+
 ```bash
-.venv/bin/reciper \
+.venv/bin/python run.py
+```
+
+You can also provide the URL directly:
+
+```bash
+.venv/bin/python run.py \
   'https://sallysbakingaddiction.com/homemade-artisan-bread/'
 ```
 
@@ -76,13 +93,13 @@ By default, RecipeR writes `outputs/<recipe-title>.txt` and prints the absolute 
 choose a path:
 
 ```bash
-.venv/bin/reciper 'https://example.com/recipe' --output outputs/dinner.txt
+.venv/bin/python run.py 'https://example.com/recipe' --output outputs/dinner.txt
 ```
 
 Existing files are protected. Add `--overwrite` when replacement is intentional:
 
 ```bash
-.venv/bin/reciper 'https://example.com/recipe' -o outputs/dinner.txt --overwrite
+.venv/bin/python run.py 'https://example.com/recipe' -o outputs/dinner.txt --overwrite
 ```
 
 Other options:
@@ -143,8 +160,11 @@ bot-blocked pages may not be extractable, and RecipeR does not bypass those cont
 ## Project layout
 
 ```text
+assets/          project artwork
+run.py           direct Python script entry point
 src/reciper/     application package
 tests/           offline unit and mocked pipeline tests
 outputs/         default location for generated .txt recipes
+.env.example     safe local configuration template
 pyproject.toml   package, dependency, test, and lint configuration
 ```

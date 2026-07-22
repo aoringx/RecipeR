@@ -1,14 +1,26 @@
+# Virtual environment
 .venv/
+
+# Python build and bytecode artifacts
 *.egg-info/
 __pycache__/
 *.py[cod]
+build/
+dist/
+
+# Test, lint, and type-check caches
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 
+# Local secrets
 .env
-.env.local
 
+# Generated recipes
 outputs/*.txt
 !outputs/.gitkeep
+
+# macOS metadata
+.DS_Store

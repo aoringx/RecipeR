@@ -208,6 +208,7 @@ class OpenAIRecipeNormalizer:
         try:
             response = self._client.responses.parse(
                 model=self._model,
+                reasoning={"effort": "low"},
                 store=False,
                 max_output_tokens=6_000,
                 input=[

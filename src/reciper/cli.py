@@ -18,7 +18,7 @@ from reciper.pipeline import RecipePipeline
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="reciper",
+        prog="run.py",
         description=(
             "Extract a recipe webpage, normalize it with OpenAI, and write a readable TXT file."
         ),

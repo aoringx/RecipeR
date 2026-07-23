@@ -15,6 +15,7 @@ HTML = """
   "@context": "https://schema.org",
   "@type": "Recipe",
   "name": "Simple & Detailed Bread",
+  "video": {"@type": "VideoObject", "url": "https://youtu.be/abc123XYZ_-"},
   "recipeIngredient": ["2 cups (250 g) flour"],
   "recipeInstructions": [{"@type": "HowToStep", "text": "Bake at 400°F for 25 minutes."}]
 }
@@ -70,6 +71,10 @@ def test_pipeline_runs_end_to_end_with_injected_normalizer(tmp_path: Path) -> No
     assert destination == tmp_path / "my-recipe.txt"
     assert destination.read_text(encoding="utf-8").startswith("Simple & Detailed Bread\n")
     assert "INGREDIENTS\n  - 2 cups (250 g) flour" in destination.read_text(encoding="utf-8")
+    assert (
+        "YouTube tutorial: https://www.youtube.com/watch?v=abc123XYZ_-"
+        in destination.read_text(encoding="utf-8")
+    )
     assert normalizer.received.ingredient_lines == ["2 cups (250 g) flour"]
 
 

@@ -19,6 +19,7 @@ def test_extracts_recipe_from_json_ld_graph_with_sections_and_tips() -> None:
     recipe = RecipeExtractor().extract(page)
 
     assert recipe.source_url == "https://recipes.example/bread"
+    assert recipe.youtube_url == "https://www.youtube.com/watch?v=abc123XYZ_-"
     assert recipe.page_title == "Detailed Artisan Bread"
     assert recipe.description == "A crusty loaf with a soft center."
     assert recipe.yield_text == "1 large loaf"
@@ -259,3 +260,63 @@ def test_json_ld_is_supplemented_with_recipe_card_notes() -> None:
     )
     recipe = RecipeExtractor().extract(page)
     assert recipe.note_lines == ["Keep the bowl covered while the dough rests."]
+
+
+@pytest.mark.parametrize(
+    ("markup", "video_id"),
+    [
+        ('<a href="https://youtu.be/AbCdEf123_-?si=share">Watch the tutorial</a>', "AbCdEf123_-"),
+        (
+            '<iframe data-lazy-src="https://www.youtube.com/embed/ZYX987abc_-?rel=0"></iframe>',
+            "ZYX987abc_-",
+        ),
+        ('<a href="https://www.youtube.com/shorts/Qwerty123_-">Video</a>', "Qwerty123_-"),
+        (
+            '<meta content="https://www.youtube.com/watch?v=Watch1234_-&amp;feature=share">',
+            "Watch1234_-",
+        ),
+    ],
+)
+def test_extracts_and_normalizes_youtube_video_links(markup: str, video_id: str) -> None:
+    html = f"""
+    <html><head><script type="application/ld+json">
+      {{
+        "@type": "Recipe",
+        "name": "Video Recipe",
+        "recipeIngredient": ["1 cup flour"],
+        "recipeInstructions": ["Mix for 2 minutes."]
+      }}
+    </script></head><body><article>{markup}</article></body></html>
+    """
+    page = FetchedPage(
+        requested_url="https://recipes.example/video",
+        final_url="https://recipes.example/video",
+        html=html,
+    )
+
+    recipe = RecipeExtractor().extract(page)
+
+    assert recipe.youtube_url == f"https://www.youtube.com/watch?v={video_id}"
+
+
+def test_ignores_youtube_channels_and_lookalike_hosts() -> None:
+    html = """
+    <html><head><script type="application/ld+json">
+      {
+        "@type": "Recipe",
+        "name": "No Tutorial Recipe",
+        "recipeIngredient": ["1 cup flour"],
+        "recipeInstructions": ["Mix for 2 minutes."]
+      }
+    </script></head><body><article>
+      <a href="https://www.youtube.com/@example">Our channel</a>
+      <a href="https://youtube.com.evil.example/watch?v=abc123XYZ_-">Not YouTube</a>
+    </article></body></html>
+    """
+    page = FetchedPage(
+        requested_url="https://recipes.example/no-video",
+        final_url="https://recipes.example/no-video",
+        html=html,
+    )
+
+    assert RecipeExtractor().extract(page).youtube_url is None

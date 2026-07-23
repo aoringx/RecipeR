@@ -7,6 +7,7 @@ import json
 import re
 from collections.abc import Iterable
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup, Tag
 
@@ -22,6 +23,18 @@ MAX_INGREDIENTS = 250
 MAX_INSTRUCTIONS = 300
 MAX_NOTES = 150
 MAX_JSON_DEPTH = 30
+_YOUTUBE_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_YOUTUBE_PATH_PREFIXES = {"embed", "live", "shorts", "v"}
+_YOUTUBE_URL_ATTRIBUTES = (
+    "href",
+    "src",
+    "data-src",
+    "data-lazy-src",
+    "data-url",
+    "data-video-url",
+    "data-embed-url",
+    "content",
+)
 _ISO_DURATION = re.compile(
     r"^P(?:(?P<weeks>\d+)W)?(?:(?P<days>\d+)D)?"
     r"(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?$",
@@ -80,8 +93,8 @@ def _walk_json(value: object) -> Iterable[dict[str, Any]]:
             stack.extend(reversed(current))
 
 
-def _json_ld_recipes(soup: BeautifulSoup) -> list[dict[str, Any]]:
-    recipes: list[dict[str, Any]] = []
+def _json_ld_nodes(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
     for script in soup.find_all("script", attrs={"type": re.compile("ld\\+json", re.I)}):
         raw = script.string or script.get_text()
         if not raw.strip():
@@ -90,8 +103,92 @@ def _json_ld_recipes(soup: BeautifulSoup) -> list[dict[str, Any]]:
             document = json.loads(raw)
         except (json.JSONDecodeError, RecursionError, TypeError):
             continue
-        recipes.extend(node for node in _walk_json(document) if "recipe" in _schema_types(node))
-    return recipes
+        nodes.extend(_walk_json(document))
+    return nodes
+
+
+def _normalize_youtube_url(value: object) -> str | None:
+    raw = html_module.unescape(str(value)).strip()
+    if not raw or "youtu" not in raw.casefold():
+        return None
+    if raw.startswith("//"):
+        raw = f"https:{raw}"
+    elif not re.match(r"^[a-z][a-z0-9+.-]*://", raw, flags=re.IGNORECASE):
+        raw = f"https://{raw}"
+
+    parsed = urlparse(raw)
+    host = (parsed.hostname or "").casefold().rstrip(".")
+    parts = [part for part in parsed.path.split("/") if part]
+    video_id: str | None = None
+
+    if host == "youtu.be" or host.endswith(".youtu.be"):
+        video_id = parts[0] if parts else None
+    elif host == "youtube.com" or host.endswith(".youtube.com"):
+        if parsed.path.rstrip("/").casefold() == "/watch":
+            video_id = next(iter(parse_qs(parsed.query).get("v", [])), None)
+        elif len(parts) >= 2 and parts[0].casefold() in _YOUTUBE_PATH_PREFIXES:
+            video_id = parts[1]
+    elif (
+        host == "youtube-nocookie.com" or host.endswith(".youtube-nocookie.com")
+    ) and len(parts) >= 2 and parts[0].casefold() == "embed":
+        video_id = parts[1]
+
+    if not video_id or not _YOUTUBE_VIDEO_ID.fullmatch(video_id):
+        return None
+    return f"https://www.youtube.com/watch?v={video_id}"
+
+
+def _youtube_url_from_value(value: object, *, depth: int = 0) -> str | None:
+    if depth > MAX_JSON_DEPTH:
+        return None
+    if isinstance(value, str):
+        return _normalize_youtube_url(value)
+    if isinstance(value, list):
+        for item in value:
+            if url := _youtube_url_from_value(item, depth=depth + 1):
+                return url
+        return None
+    if not isinstance(value, dict):
+        return None
+
+    priority_keys = ("contentUrl", "embedUrl", "url")
+    for key in priority_keys:
+        if key in value and (url := _youtube_url_from_value(value[key], depth=depth + 1)):
+            return url
+    for key, item in value.items():
+        if key not in priority_keys and (
+            url := _youtube_url_from_value(item, depth=depth + 1)
+        ):
+            return url
+    return None
+
+
+def _extract_youtube_url(
+    soup: BeautifulSoup,
+    *,
+    json_nodes: list[dict[str, Any]],
+    selected_recipe: dict[str, Any] | None,
+) -> str | None:
+    if selected_recipe and (url := _youtube_url_from_value(selected_recipe.get("video"))):
+        return url
+
+    for node in json_nodes:
+        node_types = _schema_types(node)
+        if "recipe" in node_types:
+            candidate = node.get("video")
+        elif "videoobject" in node_types:
+            candidate = node
+        else:
+            continue
+        if url := _youtube_url_from_value(candidate):
+            return url
+
+    for element in soup.find_all(True):
+        for attribute in _YOUTUBE_URL_ATTRIBUTES:
+            value = element.get(attribute)
+            if value and (url := _normalize_youtube_url(value)):
+                return url
+    return None
 
 
 def _flatten_instruction_value(
@@ -553,6 +650,7 @@ def _enforce_source_bounds(source: ExtractedRecipe) -> ExtractedRecipe:
             raise ExtractionError(f"The webpage contains an unusually large recipe {label} entry.")
 
     core_values = [
+        source.youtube_url or "",
         source.page_title or "",
         source.description or "",
         source.yield_text or "",
@@ -576,11 +674,13 @@ class RecipeExtractor:
         article_text = _extract_article_text(container)
         tip_sections = _extract_tip_sections(container)
 
-        json_recipes = _json_ld_recipes(soup)
+        json_nodes = _json_ld_nodes(soup)
+        json_recipes = [node for node in json_nodes if "recipe" in _schema_types(node)]
         microdata = _from_microdata(soup, page.final_url)
         known_card = _from_known_card(soup, page.final_url)
+        selected_recipe = max(json_recipes, key=_recipe_score) if json_recipes else None
         if json_recipes:
-            primary = _from_json_ld(max(json_recipes, key=_recipe_score), page.final_url)
+            primary = _from_json_ld(selected_recipe, page.final_url)
         else:
             primary = ExtractedRecipe(source_url=page.final_url)
         extracted = _merge_candidates(primary, (microdata, known_card))
@@ -599,6 +699,11 @@ class RecipeExtractor:
 
         extracted = extracted.model_copy(
             update={
+                "youtube_url": _extract_youtube_url(
+                    soup,
+                    json_nodes=json_nodes,
+                    selected_recipe=selected_recipe,
+                ),
                 "page_title": page_title,
                 "tip_sections": tip_sections,
                 "article_text": article_text,

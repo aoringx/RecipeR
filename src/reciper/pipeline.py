@@ -99,6 +99,10 @@ class RecipePipeline:
         source = self._extractor.extract(page)
         recipe = self._normalizer.normalize(source)
         destination = _output_path(output, title=recipe.title)
-        rendered = render_recipe(recipe, source_url=source.source_url)
+        rendered = render_recipe(
+            recipe,
+            source_url=source.source_url,
+            youtube_url=source.youtube_url,
+        )
         write_text_atomic(destination, rendered, overwrite=overwrite)
         return destination

@@ -105,6 +105,10 @@ class ExtractedRecipe(StrictModel):
     """Bounded, deterministic recipe material extracted from a webpage."""
 
     source_url: str
+    youtube_url: str | None = Field(
+        default=None,
+        description="Canonical YouTube tutorial URL found in the source webpage.",
+    )
     page_title: str | None = None
     description: str | None = None
     yield_text: str | None = None

@@ -6,7 +6,7 @@
 
 RecipeR is a Python command-line program that takes a public recipe webpage, extracts its recipe
 data, uses an OpenAI model to clean and organize the content, and writes a readable UTF-8 `.txt`
-recipe.
+recipe. When the webpage includes a YouTube video tutorial, RecipeR also includes its link.
 
 The generated file always puts the recipe sections in this order:
 
@@ -21,9 +21,10 @@ The generated file always puts the recipe sections in this order:
 
 RecipeR performs one bounded webpage fetch, looks first for Schema.org `Recipe` JSON-LD, then
 tries microdata and common recipe-card markup. It also keeps a size-limited article excerpt so tips
-outside the recipe card are available. The extracted material is sent to the OpenAI Responses API
-and parsed directly into a Pydantic schema. Python—not the model—controls numbering, wrapping,
-filenames, and final text formatting.
+outside the recipe card are available. YouTube watch links and embeds are detected directly from
+the source and normalized to a standard video URL. The extracted recipe material is sent to the
+OpenAI Responses API and parsed directly into a Pydantic schema. Python—not the model—controls the
+video link, numbering, wrapping, filenames, and final text formatting.
 
 Webpage text is treated as untrusted data. The normalizer is told not to follow embedded prompts,
 invent missing facts, or convert measurements. After structured parsing, RecipeR restores the
@@ -115,6 +116,7 @@ Other options:
 Recipe Title
 ============
 Source: https://example.com/recipe
+YouTube tutorial: https://www.youtube.com/watch?v=abc123XYZ_-
 Yield: 1 loaf
 Prep time: 1 hour 30 minutes
 Cook time: 25 minutes

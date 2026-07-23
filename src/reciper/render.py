@@ -22,10 +22,17 @@ def _wrapped(text: str, *, initial: str, subsequent: str) -> str:
     return wrapper.fill(text)
 
 
-def render_recipe(recipe: Recipe, *, source_url: str) -> str:
+def render_recipe(
+    recipe: Recipe,
+    *,
+    source_url: str,
+    youtube_url: str | None = None,
+) -> str:
     """Render a validated recipe in the requested section order."""
 
     lines = [recipe.title, "=" * len(recipe.title), f"Source: {source_url}"]
+    if youtube_url:
+        lines.append(f"YouTube tutorial: {youtube_url}")
     for label, value in (
         ("Yield", recipe.yield_text),
         ("Prep time", recipe.prep_time),

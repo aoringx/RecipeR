@@ -62,6 +62,19 @@ def test_render_recipe_omits_empty_tips_section() -> None:
     assert result.endswith("\n")
 
 
+def test_render_recipe_includes_youtube_tutorial_when_available() -> None:
+    result = render_recipe(
+        sample_recipe(with_tips=False),
+        source_url="https://example.test",
+        youtube_url="https://www.youtube.com/watch?v=abc123XYZ_-",
+    )
+
+    assert (
+        "Source: https://example.test\n"
+        "YouTube tutorial: https://www.youtube.com/watch?v=abc123XYZ_-\n"
+    ) in result
+
+
 def test_render_recipe_includes_available_yield_and_timing() -> None:
     recipe = sample_recipe(with_tips=False).model_copy(
         update={
